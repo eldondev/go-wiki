@@ -88,10 +88,10 @@ const Template = `<!doctype html>
 
     <footer class="commits">
         {{ range .Commits }}
-        <div class="commit" data-hash="{{ .Hash }}" data-file="{{ .FileNoExt }}">
-            <span class="date">{{ .HumanDate }}</span> &middot;
-            <span class="author">{{ .Author }}</span> &middot;
-            <span class="subject">{{ .Subject }}</span>
+        <div class="commit" data-hash="{{ .TreeHash }}" data-file="{{ .FileNoExt }}">
+            <span class="date">{{ .Author.When }}</span> &middot;
+            <span class="author">{{ .Author.Name }}</span> &middot;
+            <span class="subject">{{ .Message }}</span>
             <div class="diff"></div>
         </div>
         {{ end}}

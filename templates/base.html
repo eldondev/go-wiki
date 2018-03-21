@@ -82,7 +82,7 @@
 
     <footer class="commits">
         {{ range .Commits }}
-        <div class="commit" data-hash="{{ .Hash }}" data-file="{{ .FileNoExt }}">
+        <div class="commit" data-hash="{{ .TreeHash }}" data-file="{{ .Message }}">
             <span class="date">{{ .HumanDate }}</span> &middot;
             <span class="author">{{ .Author }}</span> &middot;
             <span class="subject">{{ .Subject }}</span>

@@ -1,133 +1,75 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
-	"fmt"
+	git "gopkg.in/src-d/go-git.v4"
+	"gopkg.in/src-d/go-git.v4/plumbing/object"
+	"gopkg.in/src-d/go-git.v4/plumbing/hash"
+	"strings"
 	"log"
 	"os/exec"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
 )
 
 type Commit struct {
-	Author  string
-	Date    time.Time
-	File    string
-	Hash    string
-	Subject string
-}
-
-func (c Commit) Diff() ([]byte, error) {
-	return Diff(c.File, c.Hash)
-}
-
-func (c Commit) FileNoExt() string {
-	return strings.TrimSuffix(c.File, filepath.Ext(c.File))
-}
-
-func (c Commit) HumanDate() string {
-	return c.Date.Format("2006-01-02 15:04")
+	object.Commit
+	FileNoExt string
 }
 
 func Diff(file, hash string) ([]byte, error) {
-	var out bytes.Buffer
+	r, _ := git.PlainOpen(options.Dir)
+	co, _ := r.CommitObject(hash.NewHash(hash))
+	lp := co.ParentHashes()[0]
+	p, _ := co.Patch(lp);
+	for _, f := range(p.FilePatches()) {
+			from, to := f.Files()
+			if (from != nil && from.Path() == filename) || (to != nil && to.Path() == filename) {
+				break;
+			}
+		}
 
-	git := exec.Command("git", "-C", options.Dir, "show", "--oneline", "--no-color", hash, file)
-
-	// Prune diff stats from output with tail
-	tail := exec.Command("tail", "-n", "+8")
-
-	var err error
-	tail.Stdin, err = git.StdoutPipe()
-	if err != nil {
-		log.Println("ERROR", err)
-	}
-
-	tail.Stdout = &out
-
-	err = tail.Start()
-	if err != nil {
-		log.Println("ERROR", err)
-	}
-
-	err = git.Run()
-	if err != nil {
-		log.Println("ERROR", err)
-	}
-
-	err = tail.Wait()
-	if err != nil {
-		log.Println("ERROR", err)
-	}
-
-	return out.Bytes(), err
+	return out.Bytes(), err)
 }
 
 func Commits(filename string, n int) ([]Commit, error) {
 	var commits []Commit
-
-	// abbreviated commit hash|author name|author date, UNIX timestamp|subject
-	logFormat := "--pretty=%h|%an|%at|%s"
-
-	cmd := exec.Command("git", "-C", options.Dir, "log", "-n", strconv.Itoa(n), logFormat, filename)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		log.Println("ERROR", err)
-		return commits, err
-	}
-
-	defer stdout.Close()
-
-	err = cmd.Start()
-	if err != nil {
-		log.Println("ERROR", err)
-		return commits, err
-	}
-
-	out := bufio.NewScanner(stdout)
-	for out.Scan() {
-		fields := strings.Split(out.Text(), "|")
-
-		commit := Commit{
-			Author:  fields[1],
-			File:    filename,
-			Hash:    fields[0],
-			Subject: fields[3],
+	fnx := filename[:strings.LastIndex(filename, ".")]
+	r, _ := git.PlainOpen(options.Dir)
+	l, _ := r.Log(&git.LogOptions{})
+	head, _ := r.Head()
+	last, _ := r.CommitObject(head.Hash())
+	l.ForEach(func(co *object.Commit) error {
+		p, _ := co.Patch(last);
+		log.Printf("%+v", p.FilePatches());
+		for _, f := range(p.FilePatches()) {
+			//log.Println(f);
+			from, to := f.Files()
+			if (from != nil && from.Path() == filename) || (to != nil && to.Path() == filename) {
+				log.Printf("%+v, %+v", last);
+				commits = append(commits, Commit{*last,fnx} )
+				break;
+			}
 		}
-
-		unix, err := strconv.ParseInt(fields[2], 10, 64)
-		if err != nil {
-			log.Println("ERROR", err)
-		}
-		commit.Date = time.Unix(unix, 0)
-
-		commits = append(commits, commit)
-	}
+		log.Printf("done");
+		last = co
+		return nil
+	})
 
 	return commits, nil
 }
 
 // Check if a path contains a Git repository
 func IsGitRepository(path string) bool {
-	var out bytes.Buffer
-	cmd := exec.Command("git", "-C", options.Dir, "rev-parse", "--is-inside-work-tree")
-	cmd.Stdout = &out
-
-	err := cmd.Run()
+	r, err := git.PlainOpen(options.Dir)
 	if err != nil {
 		log.Println("ERROR", err)
 		return false
 	}
 
-	var val bool
-	_, err = fmt.Sscanf(out.String(), "%t", &val)
+	r.Log(&git.LogOptions{})
 	if err != nil {
 		log.Println("ERROR", err)
 		return false
 	}
 
-	return val
+	return true
 }
