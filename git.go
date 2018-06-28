@@ -3,11 +3,11 @@ package main
 import (
 	"bytes"
 	git "gopkg.in/src-d/go-git.v4"
+	"gopkg.in/src-d/go-git.v4/plumbing"
+	"gopkg.in/src-d/go-git.v4/plumbing/format/diff"
 	"gopkg.in/src-d/go-git.v4/plumbing/object"
-	"gopkg.in/src-d/go-git.v4/plumbing/hash"
-	"strings"
 	"log"
-	"os/exec"
+	"strings"
 )
 
 type Commit struct {
@@ -15,19 +15,54 @@ type Commit struct {
 	FileNoExt string
 }
 
-func Diff(file, hash string) ([]byte, error) {
-	r, _ := git.PlainOpen(options.Dir)
-	co, _ := r.CommitObject(hash.NewHash(hash))
-	lp := co.ParentHashes()[0]
-	p, _ := co.Patch(lp);
-	for _, f := range(p.FilePatches()) {
-			from, to := f.Files()
-			if (from != nil && from.Path() == filename) || (to != nil && to.Path() == filename) {
-				break;
+func Contents(filename string) (string, error) {
+	if r, err := git.PlainOpen(options.Dir); err != nil {
+		return "", err
+	} else {
+		if head, err := r.Head(); err != nil {
+			return "", err
+		} else {
+			if headCommit, err := r.CommitObject(head.Hash()); err != nil {
+				return "", err
+			} else {
+				if tree, err := headCommit.Tree(); err != nil {
+					return "", err
+				} else {
+					if entry, err := tree.FindEntry(filename); err != nil {
+						return "", err
+					} else {
+						if file, err := tree.TreeEntryFile(entry); err != nil {
+							return "", err
+						} else {
+							return file.Contents()
+						}
+					}
+				}
 			}
 		}
+	}
+}
 
-	return out.Bytes(), err)
+func Diff(file, hash string) ([]byte, error) {
+	var err error
+	if r, err := git.PlainOpen(options.Dir); err == nil {
+		if co, err := r.CommitObject(plumbing.NewHash(hash)); err == nil {
+			lp := co.ParentHashes[0]
+			lpc, err := r.CommitObject(lp)
+			p, err := lpc.Patch(co)
+			var out bytes.Buffer
+			for _, f := range p.FilePatches() {
+				from, to := f.Files()
+				if (from != nil && from.Path() == file) || (to != nil && to.Path() == file) {
+					dw := diff.NewUnifiedEncoder(&out, 2)
+					dw.Encode(p)
+					return out.Bytes(), err
+				}
+			}
+		}
+	}
+	return nil, err
+
 }
 
 func Commits(filename string, n int) ([]Commit, error) {
@@ -38,18 +73,19 @@ func Commits(filename string, n int) ([]Commit, error) {
 	head, _ := r.Head()
 	last, _ := r.CommitObject(head.Hash())
 	l.ForEach(func(co *object.Commit) error {
-		p, _ := co.Patch(last);
-		log.Printf("%+v", p.FilePatches());
-		for _, f := range(p.FilePatches()) {
+		if co.NumParents() < 1 {
+			return nil
+		}
+		cop, _ := co.Parent(0)
+		p, _ := co.Patch(cop)
+		for _, f := range p.FilePatches() {
 			//log.Println(f);
 			from, to := f.Files()
 			if (from != nil && from.Path() == filename) || (to != nil && to.Path() == filename) {
-				log.Printf("%+v, %+v", last);
-				commits = append(commits, Commit{*last,fnx} )
-				break;
+				commits = append(commits, Commit{*co, fnx})
+				break
 			}
 		}
-		log.Printf("done");
 		last = co
 		return nil
 	})

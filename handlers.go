@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"path"
@@ -25,12 +23,11 @@ func WikiHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Path to the file as it is on the the local file system
-	fsPath := fmt.Sprintf("%s/%s", options.Dir, filePath)
 
 	// Serve (accepted) images
 	for _, filext := range strings.Split(imageTypes, " ") {
 		if path.Ext(r.URL.Path) == filext {
-			http.ServeFile(w, r, fsPath)
+			http.ServeFile(w, r, filePath)
 			return
 		}
 	}
@@ -41,16 +38,16 @@ func WikiHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	md, err := ioutil.ReadFile(fsPath + ".md")
+	md, err := Contents(filePath + ".md")
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 
 	wiki := Wiki{
-		Markdown:  md,
+		Markdown:  []byte(md),
 		CustomCSS: options.CustomCSS,
-		filepath:  fsPath,
+		filepath:  filePath,
 		template:  options.template,
 	}
 

@@ -19,7 +19,7 @@ func DiffHandler(w http.ResponseWriter, r *http.Request) {
 
 	diff, err := Diff(file, hash)
 	if err != nil {
-		log.Println("ERROR", "Failed to get commit hash", hash)
+		log.Println("ERROR", "Failed to get commit hash ", hash, err)
 	}
 
 	// XXX: This could probably be done in a nicer way
